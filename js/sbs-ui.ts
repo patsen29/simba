@@ -1,7 +1,7 @@
 /// <reference path="sbs.ts" />
 
 $(document).ready(function() {
-	jQuery.get("teams.json").done(function(data) {
+	jQuery.get("data/teams.json").done(function(data) {
 		loadData(data);
 		populateDropdowns();
 	}).fail(function() {
