@@ -1,4 +1,4 @@
-/// <reference path="typings/jquery/jquery.d.ts" />
+/// <reference path="jquery.d.ts" />
 
 const POS_LABELS = ["-", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "PH", "PR"];
 var DATA: any = {};
