@@ -21,7 +21,7 @@
 			"gb": 1.066
 		}
 	},
-	"defaults": ["2015NNYM", "2015AKC"],
+	"defaults": [4, 2],
 	"teams": [{
         "city": "Chicago",
         "nick": "Cubs",

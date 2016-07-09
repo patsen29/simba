@@ -1,7 +1,4 @@
-/// <reference path="jquery.d.ts" />
-
 const POS_LABELS = ["-", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "PH", "PR"];
-var DATA: any = {};
 
 class Dice {
 	roll(sides?: number) {
@@ -336,29 +333,6 @@ class PitchingStaff {
 		this.cl = [];
 	}
 	// TODO: Expand
-}
-
-class PendingGame {
-	teams: Team[];
-	useDH: boolean;
-	starters: Player[];
-	lineups: Lineup[];
-	constructor () {
-		this.teams = [];
-		this.starters = [];
-		this.lineups = [];
-	}
-	setTeam(index: number, teamId: string) {
-		// TODO: Finish this.
-		let team = DATA.teams[teamId];
-		this.teams[index] = team;
-		if (index === 1 && this.useDH !== team.useDH) {
-			this.useDH = team.useDH;
-			// reset lineups
-		} else {
-			// just set this team's lineup
-		}
-	}
 }
 
 class Lineup {

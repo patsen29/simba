@@ -1,11 +1,9 @@
-/// <reference path="jquery.d.ts" />
 var __extends = (this && this.__extends) || function (d, b) {
     for (var p in b) if (b.hasOwnProperty(p)) d[p] = b[p];
     function __() { this.constructor = d; }
     d.prototype = b === null ? Object.create(b) : (__.prototype = b.prototype, new __());
 };
 var POS_LABELS = ["-", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH", "PH", "PR"];
-var DATA = {};
 var Dice = (function () {
     function Dice() {
     }
@@ -296,24 +294,6 @@ var PitchingStaff = (function () {
         this.cl = [];
     }
     return PitchingStaff;
-}());
-var PendingGame = (function () {
-    function PendingGame() {
-        this.teams = [];
-        this.starters = [];
-        this.lineups = [];
-    }
-    PendingGame.prototype.setTeam = function (index, teamId) {
-        // TODO: Finish this.
-        var team = DATA.teams[teamId];
-        this.teams[index] = team;
-        if (index === 1 && this.useDH !== team.useDH) {
-            this.useDH = team.useDH;
-        }
-        else {
-        }
-    };
-    return PendingGame;
 }());
 var Lineup = (function () {
     function Lineup() {
