@@ -13,9 +13,11 @@ var GameScreen = (function (_super) {
         this.animationQueue = [];
         this.scoreLabels = [];
         this.runnerLabels = [];
+        this.runnerSprites = [];
+        this.game.load.image("card", "img/player/0B2.jpg");
     };
     GameScreen.prototype.create = function () {
-        var font = { font: "20px Arial", fill: "#000000" };
+        var font = { font: "20px Arial", fill: "black" };
         var fontWrap = {
             font: "18px Arial",
             fill: "black",
@@ -23,6 +25,7 @@ var GameScreen = (function (_super) {
             wordWrap: true,
             wordWrapWidth: 200
         };
+        var fontRun = { font: "13px Arial", fill: "white", align: "center" };
         this.game.stage.backgroundColor = '#0000ff';
         this.add.image(0, 0, "bg");
         this.add.image(200, 0, "scorepanel");
@@ -35,10 +38,14 @@ var GameScreen = (function (_super) {
         this.inningLabel = this.game.add.text(300, 10, "Top 1st", font);
         this.outLabel = this.game.add.text(300, 50, "0 out", font);
         this.announcerLabel = this.game.add.text(390, 10, "Play ball!", fontWrap);
-        this.batterLabel = this.game.add.text(10, 300, "", font);
-        this.pitcherLabel = this.game.add.text(10, 330, "", font);
-        for (var i = 1; i <= 3; i++) {
-            this.runnerLabels[i] = this.game.add.text(10, 330 + i * 30, "R", font);
+        var loc = [[223, 477], [470, 415], [350, 350], [160, 390], [305, 403]];
+        for (var i = 0; i < loc.length; i++) {
+            var sprite = this.game.add.sprite(loc[i][0], loc[i][1], 'barebar');
+            sprite.anchor.set(0.5, 0.5);
+            this.runnerSprites[i] = sprite;
+            var label = this.game.add.text(loc[i][0], loc[i][1], "text", fontRun);
+            label.anchor.set(0.5, 0.4);
+            this.runnerLabels[i] = label;
         }
         this.game.add.button(10, 560, 'arrowbuttons', this.advanceGame, this, 1, 1, 3);
         this.game.add.button(70, 560, 'arrowbuttons', this.simGame, this, 1, 1, 3);
@@ -46,8 +53,11 @@ var GameScreen = (function (_super) {
         this.updateStrings();
     };
     GameScreen.prototype.updateStrings = function () {
+        var colours = [0x002147, 0xcc092f]; // TODO: Customize these to teams.
         var g = this.game.ballgame;
         var innStr = (g.innTop ? "Top" : "Bot") + " " + g.inning;
+        var offColour = (g.innTop ? colours[0] : colours[1]);
+        var defColour = (g.innTop ? colours[1] : colours[0]);
         this.inningLabel.text = innStr;
         for (var i = 0; i < 2; i++) {
             this.scoreLabels[i].text = g.teams[i].r.toString();
@@ -58,15 +68,25 @@ var GameScreen = (function (_super) {
             logStr = g.getLastPlay().getLog();
         }
         this.announcerLabel.text = logStr;
-        this.batterLabel.text = "Batting: " + g.getBatter().getName();
-        this.pitcherLabel.text = "Pitching: " + g.getPitcher().getName();
         for (var i = 1; i <= 3; i++) {
-            var text = "";
             if (g.bases[i]) {
-                text = g.bases[i].getName();
+                this.runnerLabels[i].visible = true;
+                this.runnerLabels[i].text = g.bases[i].getName();
+                this.runnerSprites[i].visible = true;
+                this.runnerSprites[i].tint = offColour;
             }
-            this.runnerLabels[i].text = toOrdinal(i) + ": " + text;
+            else {
+                this.runnerLabels[i].visible = false;
+                this.runnerSprites[i].visible = false;
+            }
         }
+        this.runnerSprites[0].tint = offColour;
+        this.runnerSprites[4].tint = defColour;
+        this.runnerLabels[0].text = g.getBatter().getName();
+        this.runnerLabels[4].text = g.getPitcher().getName();
+    };
+    GameScreen.prototype.render = function () {
+        this.game.debug.inputInfo(500, 500);
     };
     GameScreen.prototype.advanceGame = function () {
         var g = this.game.ballgame;

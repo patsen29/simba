@@ -11,8 +11,11 @@ var Preload = (function (_super) {
     Preload.prototype.preload = function () {
         this.game.load.image("bg", "img/kauffman-n.jpg");
         this.game.load.image("scorepanel", "img/scorepanel.png");
+        this.game.load.image("icon", "img/favicon.png");
         this.game.load.spritesheet('arrowbuttons', 'img/arrowbuttons.png', 39, 28);
         this.game.load.spritesheet('closeButton', 'img/close.png', 36, 36);
+        this.game.load.spritesheet('buttons', 'img/buttons.png', 190, 45);
+        this.game.load.spritesheet('barebar', 'img/barebar.png', 96, 16);
         this.game.load.json('teamData', 'data/teams2015.json');
     };
     Preload.prototype.create = function () {

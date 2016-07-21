@@ -1,6 +1,7 @@
 /// <reference path="app.ts"/>
 
 class GameScreen extends Phaser.State {
+    // TODO: Have player cards. 175x125 too small? 375x525 for big?
     game: PhaserGame;
     animationQueue: Animation[];
 
@@ -11,14 +12,17 @@ class GameScreen extends Phaser.State {
     batterLabel: Phaser.Text;
     pitcherLabel: Phaser.Text;
     runnerLabels: Phaser.Text[];
+    runnerSprites: Phaser.Sprite[];
 
     preload() {
         this.animationQueue = [];
         this.scoreLabels = [];
         this.runnerLabels = [];
+        this.runnerSprites = [];
+        this.game.load.image("card", "img/player/0B2.jpg");
     }
     create() {
-        let font = { font: "20px Arial", fill: "#000000" };
+        let font = { font: "20px Arial", fill: "black" };
         let fontWrap = {
             font: "18px Arial",
             fill: "black",
@@ -26,6 +30,7 @@ class GameScreen extends Phaser.State {
             wordWrap: true,
             wordWrapWidth: 200
         }
+        let fontRun = { font: "13px Arial", fill: "white", align: "center" }
 
         this.game.stage.backgroundColor = '#0000ff';
         this.add.image(0, 0, "bg");
@@ -41,10 +46,16 @@ class GameScreen extends Phaser.State {
         this.outLabel = this.game.add.text(300, 50, "0 out", font);
 
         this.announcerLabel = this.game.add.text(390, 10, "Play ball!", fontWrap);
-        this.batterLabel = this.game.add.text(10, 300, "", font);
-        this.pitcherLabel = this.game.add.text(10, 330, "", font);
-        for (let i = 1; i <= 3; i++) {
-            this.runnerLabels[i] = this.game.add.text(10, 330 + i*30, "R", font);
+
+        let loc = [[223, 477], [470, 415], [350, 350], [160, 390], [305, 403]];
+        for (let i=0; i<loc.length; i++) {
+            let sprite = this.game.add.sprite(loc[i][0], loc[i][1], 'barebar');
+            sprite.anchor.set(0.5, 0.5);
+            this.runnerSprites[i] = sprite;
+            
+            let label = this.game.add.text(loc[i][0], loc[i][1], "text", fontRun);
+            label.anchor.set(0.5, 0.4);
+            this.runnerLabels[i] = label;
         }
 
         this.game.add.button(10, 560, 'arrowbuttons', this.advanceGame, this, 1, 1, 3);
@@ -55,8 +66,11 @@ class GameScreen extends Phaser.State {
         this.updateStrings()
     }
     updateStrings() {
+        let colours = [0x002147, 0xcc092f]; // TODO: Customize these to teams.
         let g = this.game.ballgame;
         let innStr = (g.innTop ? "Top" : "Bot") + " " + g.inning;
+        let offColour = (g.innTop ? colours[0] : colours[1]);
+        let defColour = (g.innTop ? colours[1] : colours[0]);
         this.inningLabel.text = innStr;
         for (let i=0; i<2; i++) {
             this.scoreLabels[i].text = g.teams[i].r.toString();
@@ -68,16 +82,23 @@ class GameScreen extends Phaser.State {
         }
         this.announcerLabel.text = logStr;
         
-        this.batterLabel.text = "Batting: " + g.getBatter().getName();
-        this.pitcherLabel.text = "Pitching: " + g.getPitcher().getName();
         for (let i=1; i<=3; i++) {
-            let text = "";
             if (g.bases[i]) {
-                text = g.bases[i].getName();
+                this.runnerLabels[i].visible = true;
+                this.runnerLabels[i].text = g.bases[i].getName();
+                this.runnerSprites[i].visible = true;
+                this.runnerSprites[i].tint = offColour;
+            } else {
+                this.runnerLabels[i].visible = false;
+                this.runnerSprites[i].visible = false;
             }
-            this.runnerLabels[i].text = toOrdinal(i) + ": " + text;
         }
+        this.runnerSprites[0].tint = offColour;
+        this.runnerSprites[4].tint = defColour;
+        this.runnerLabels[0].text = g.getBatter().getName();
+        this.runnerLabels[4].text = g.getPitcher().getName();
     }
+
     advanceGame() {
         let g = this.game.ballgame;
 		g.advanceGame(null);
