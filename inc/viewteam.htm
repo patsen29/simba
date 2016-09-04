@@ -1,0 +1,8 @@
+<h2>{{teamData.city}} {{teamData.nick}}</h2>
+<ul>
+    <li ng-repeat="player in teamData.roster">
+        {{player.first}} {{player.last}} {{player.pos}} {{player.stamina | number:1}}
+    </li>
+</ul>
+
+<button ng-click="ui.switchTab('league')">Back</button>

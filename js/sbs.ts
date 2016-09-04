@@ -2,7 +2,7 @@ const POS_LABELS = ["-", "P", "C", "1B", "2B", "3B", "SS", "LF", "CF", "RF", "DH
 
 class Dice {
 	roll(sides?: number) {
-		if (!sides) {
+		if (!sides || sides <= 1) {
 			return Math.random();
 		}
 		return Math.floor(Math.random() * sides) + 1;
@@ -34,6 +34,7 @@ class Player {
 	bat: Ratio;
 	pit: Ratio;
 	stamina: number;
+	speed: number;
 	stats: any = {};
 	getName(type ? : number) {
 		if (!type) {
@@ -51,6 +52,7 @@ class Player {
 		else {
 			return this.first + " " + this.last;
 		}
+		// TODO: Handle max length better?
 	}
 	toString() {
 		return "[" + this.getName(1) + " " + POS_LABELS[this.pos] + "]";
@@ -66,18 +68,6 @@ class Ratio {
 	tr: number;
 	sba: number;
 	gb: number;
-	static fromJson(json: any) {
-		let r = new Ratio();
-		r.bb = json.bb;
-		r.so = json.so;
-		r.hr = json.hr;
-		r.h = json.h;
-		r.xb = json.xb;
-		r.tr = json.tr;
-		r.sba = json.sba;
-		r.gb = json.gb;
-		return r;
-	}
 	constructor(old ? : Ratio) {
 		if (old) {
 			this.bb = old.bb;
@@ -131,6 +121,23 @@ class Ratio {
 		let gb = this.gb / (1 + this.gb) * low;
 		matchup.gb = low - gb;
 		return matchup;
+	}
+}
+
+class LeagueAverage extends Ratio {
+	id: string;
+	static fromJson(json: any, id: string) {
+		let r = new LeagueAverage();
+		r.bb = json.bb;
+		r.so = json.so;
+		r.hr = json.hr;
+		r.h = json.h;
+		r.xb = json.xb;
+		r.tr = json.tr;
+		r.sba = json.sba;
+		r.gb = json.gb;
+		r.id = id;
+		return r;
 	}
 }
 
@@ -244,9 +251,7 @@ function ratePlayer(line: string, lgAvg: Ratio): Player {
 		else if (arm === 'r') {
 			p.arm = "L/R";
 		}
-		p.stats["pIP"] = ip;
-		p.stats["pERA"] = era;
-		
+
 		// Hitting ratings
 		let code = line[80] || "C";
 		let bH = {"A":25, "B":20, "C":15, "D":10, "E":5}[code]
@@ -261,6 +266,7 @@ function ratePlayer(line: string, lgAvg: Ratio): Player {
 			so: 55 - 1.02 * bH,
 			sb: 0.07
 		});
+		p.speed = 1;
 
 	}
 	else {
@@ -273,6 +279,7 @@ function ratePlayer(line: string, lgAvg: Ratio): Player {
 		let so = +line.substring(51, 54);
 		p.arm = line[59] + "/?";
 		let sb = +line.substring(64, 67);
+		let cs = +line.substring(68, 70);
 		p.bat = calcBatRatios({
 			ab: ab,
 			h: h,
@@ -283,9 +290,15 @@ function ratePlayer(line: string, lgAvg: Ratio): Player {
 			so: so,
 			sb: sb
 		}, lgAvg);
-		p.stats["bAB"] = ab;
-		p.stats["bH"] = h;
-		p.stats["bHR"] = hr;
+		
+		// Calculate speed
+		let sp1 = ((sb + 3) / (sb + cs + 7) - .4) * 20;
+		let sp2 = Math.sqrt((sb + cs) / (h - db - tr - hr + bb)) / .07;
+		let sp3 = tr / (ab - hr - so) / .0016;
+		sp1 = Math.max(0, Math.min(10, sp1));
+		sp2 = Math.max(0, Math.min(10, sp2));
+		sp3 = Math.max(0, Math.min(10, sp3));
+		p.speed = Math.max(1, Math.round((10 * sp1 + 10 * sp2 + 6 * sp3) / 26));
 	}
 
 	return p;
@@ -310,12 +323,16 @@ class BoxScoreEntry {
 			this.posList.push(pos);
 		}
 	}
-	getName() {
-		let posStr = [];
-		for (let i=0; i<this.posList.length; i++) {
-			posStr.push(POS_LABELS[this.posList[i]].toLowerCase());
+	getName(includePos: boolean) {
+		let str = this.player.getName();
+		if (includePos) {
+			let posStr = [];
+			for (let i=0; i<this.posList.length; i++) {
+				posStr.push(POS_LABELS[this.posList[i]].toLowerCase());
+			}
+			str = str + " " + posStr.join("-");
 		}
-		return this.player.getName() + " " + posStr.join("-");
+		return str;
 	}
 	creditStat(stat: string) {
 		this.stats[stat] = this.getStat(stat) + 1;
@@ -375,6 +392,7 @@ class Lineup {
 }
 
 class Team {
+	key: string;
 	city: string; // City name (Toronto)
 	nick: string; // Team nickname (Blue Jays)
 	abbr: string; // Short code (TOR)
@@ -384,7 +402,8 @@ class Team {
 	// Inactive/disabled roster?
 	lineups: Lineup[];
 	staff: PitchingStaff;
-	constructor(city: string, nick: string, abbr: string, useDH: boolean, lgAvg: Ratio) {
+	constructor(key: string, city: string, nick: string, abbr: string, useDH: boolean, lgAvg: Ratio) {
+		this.key = key;
 		this.city = city;
 		this.nick = nick;
 		this.abbr = abbr;
@@ -393,6 +412,9 @@ class Team {
 		this.roster = [];
 		this.lineups = [];
 		this.staff = new PitchingStaff();
+	}
+	getFullName() {
+		return this.city + " " + this.nick;
 	}
 }
 
@@ -407,6 +429,7 @@ class TeamState {
 	r: number;
 	h: number;
 	e: number;
+	manager: string; // username if player, falsy if AI
 	fatigue: number; // current pitcher fatigue
 	atBat: number; // Who's next to bat (0-8)
 	constructor(team: Team) {
@@ -543,7 +566,7 @@ class Play implements Loggable {
 	bases: Player[]; // Includes batter [0,1,2,3]
 	adv: number[];
 	play: string;
-	flags: Object;
+	flags: any;
 	type: string;
 	constructor(game: Game) {
 		this.game = game;
@@ -581,13 +604,26 @@ class Play implements Loggable {
 					str += " singled";
 					break;
 				case "GB":
-					str += " grounded out";
+					if (this.flags.gdpResult) {
+						str += " grounded into double play";
+					} else if (this.flags.reachFC) {
+						str += " reached on fielder's choice";
+					} else {
+						str += " grounded out";
+					}
 					break;
 				case "FB":
 					str += " flied out";
 					break;
 				default:
 					str += " does unknown play " + this.play;
+			}
+			let labels = [" is out", " to first", " to second", " to third", " scores"];
+			for (let i=1; i<=3; i++) {
+				if (this.bases[i] && this.adv[i] !== null && this.adv[i] !== i ) {
+					let advBase = this.adv[i];
+					str = str + ", " + this.bases[i].getName() + labels[advBase];
+				}
 			}
 			return str + ". ";
 		}
@@ -618,6 +654,30 @@ class Play implements Loggable {
 			return "FB";
 		}
 	}
+	
+	private findOdds(specs) {
+		let odds = specs.base || 0;
+		if (specs.speed) {
+			odds = odds + .04 * specs.speed;
+		}
+		if (specs.outsRule) {
+			if (this.game.outs === 2) {
+				odds += .10;
+			} else {
+				odds -= .05;
+			}
+		}
+		// TODO: Randomize ±20%
+		let cap = specs.cap || .02;
+		if (odds < cap) {
+			odds = cap;
+		}
+		if (odds > 1 - cap) { 
+			odds = 1 - cap; 
+		}
+		return odds;
+	}
+	
 	private resolveBB() {
 		this.adv[0] = 1;
 		if (this.bases[1]) {
@@ -653,15 +713,48 @@ class Play implements Loggable {
 		this.game.getTeamDefense().creditPitcher("pH", "pBFP");
 		this.finalizePlay();
 	}
+	
 	private resolve2B() {
 		this.adv = [2, 3, 4, 4];
-		// TODO Score from 1st on double
-		console.debug("TODO Resolve 2B");
+		if (this.bases[1]) {
+			if (!this.flags.odds1) {
+				this.flags.odds1 = this.findOdds({
+					base: .3, 
+					speed: this.bases[1].speed,
+					outsRule: true
+				});
+			}
+			if (!this.flags.off) {
+				// Assuming AI
+				let breakevenArr = [.91, .79, .46];
+				let breakeven = breakevenArr[this.game.outs];
+				if (this.flags.odds1 >= breakeven) {
+					this.flags.off = "send";
+				} else {
+					this.flags.off = "hold";
+				}
+				console.log("  [AI] Score from 1st? " + this.flags.odds1 + 
+						" vs " + breakeven + ": " + this.flags.off);
+				// TODO: Stop for humans
+			}
+			if (this.flags.off === "send") {
+				let roll = this.game.dice.roll();
+				if (roll < this.flags.odds1) {
+					this.adv[1] = 4;
+				} else {
+					this.adv[1] = 0;
+				}
+				console.log("  Score from 1st? " + 
+						roll.toFixed(3) + ": " + this.adv[1]);
+			}
+		}
+		
 		this.game.getTeamOffense().h += 1;
 		this.game.getTeamOffense().creditBatter("bH", "b2B", "bAB");
 		this.game.getTeamDefense().creditPitcher("pH", "pBFP");
 		this.finalizePlay();
 	}
+	
 	private resolve1B() {
 		this.adv = [1, 2, 3, 4];
 		// TODO Advance on singles
@@ -671,22 +764,102 @@ class Play implements Loggable {
 		this.game.getTeamDefense().creditPitcher("pH", "pBFP");
 		this.finalizePlay();
 	}
+	
 	private resolveGB() {
-		this.adv[0] = 0;
-		// TODO Handle real grounders
-		console.debug("TODO Resolve GB");
+		if (!this.flags.gbType) {
+			this.flags.gbType = this.game.dice.roll(4);
+		}
+		if (this.game.outs === 2) {
+			// Take routine out at 1st
+			this.adv[0] = 0;
+			
+		} else if (this.flags.gbType === 1) {
+			// automatic runner advancing grounders
+			this.adv = [0, 2, 3, 4];
+
+		} else if (this.flags.gbType === 2) {
+			// non-runner advancing, and lead forced runner is out. (Or GB is no one on 1st)
+			this.resolveSoftGB();
+			
+		} else {
+			// potential double play grounders
+			this.resolvePotentialGDP();
+		}
+		
 		this.game.getTeamOffense().creditBatter("bAB");
 		this.game.getTeamDefense().creditPitcher("pBFP");
 		this.finalizePlay();
 	}
+	
+	private resolveSoftGB() {
+		if (this.bases[1]) {
+			if (this.bases[2]) {
+				if (this.bases[3]) {
+					this.adv = [1, 2, 3, 0];
+				} else {
+					this.adv = [1, 2, 0, null];
+				}
+			} else {
+				this.adv = [1, 0, null, 3];
+			}
+		} else {
+			this.adv = [0, null, 2, 3];
+		}
+	}
+	
+	private resolvePotentialGDP() {
+		if (this.flags.infieldIn) {
+			throw "TODO Not implemented yet";
+			
+		} else {
+			if (this.bases[1]) {
+				let dpDC = 4 + this.bases[1].speed; // Base 5/13 odds. TODO: Factor speed, defense.
+				let dpRoll = this.game.dice.roll(13);
+				console.debug("  DP roll: " + dpRoll + " vs DC " + dpDC);
+				if (dpRoll >= dpDC) {
+					this.flags.gdpResult = true;
+					this.game.getTeamOffense().creditBatter("bGDP");
+					if (this.game.outs >= 1) {
+						this.adv = [0, 0, null, null];
+					} else {
+						this.adv = [0, 0, 3, 4];
+					}
+				} else {
+					this.adv = [1, 0, 3, 4];
+					this.flags.reachFC = true;
+				}
+			} else {
+				this.adv = [0, 2, 3, 4];
+			}
+		}
+	}
+	
 	private resolveFB() {
-		this.adv[0] = 0;
+		if (this.game.outs === 2) {
+			this.adv[0] = 0;
+			this.game.getTeamOffense().creditBatter("bAB");
+
+		} else if (this.bases[2] || this.bases[3]) {
+			// TODO: Upgrade this.
+			this.adv[0] = 0;
+			this.game.getTeamOffense().creditBatter("bAB");
+			// this.resolveTagup();
+			
+		} else {
+			this.adv[0] = 0;
+			this.game.getTeamOffense().creditBatter("bAB");
+		}
+		
 		// TODO Handle tagup.
 		console.debug("TODO Resolve FB");
-		this.game.getTeamOffense().creditBatter("bAB");
 		this.game.getTeamDefense().creditPitcher("pBFP");
 		this.finalizePlay();
 	}
+	
+	private resolveTagup() {
+		var odds2 = 0, odds3 = 0;
+	}
+	
 	private finalizePlay() {
 		// Note: this.game.bases is game state we're updating.
 		// this.bases is the initial state of bases before the play.
@@ -769,7 +942,15 @@ class Play implements Loggable {
 	}
 	advance(command: string) {
 		if (this.status === 0) {
-			this.status = 1; // TODO: Handle manager cmds
+			// TODO: Do something about empty commands.
+			if (command && command.substring(0, 6) === "force:") {
+				this.play = command.substring(6);
+				this.status = 2;
+			} else {
+				// auto advance for now.
+				this.status = 1;
+				// TODO: Handle manager commands.
+			}
 		}
 		if (this.status === 1) {
 			let ratios = new Ratio(this.game.environment);
@@ -1009,6 +1190,15 @@ class AIUtils {
 		return list;
 	}
 	static considerReliever(team: TeamState, startOfInning: boolean) {
+		// Step 1: Decide if we need a hook
+		// Step 2: Decide game situation and what kind of reliever we need
+		// Step 3: Set initial expectation of new pitcher's stamina
+		
+		// CL 9th, up 1-3
+		// SU 8th+, within 2; maybe 7th
+		// MR 5-7th, within 4
+		// LR 1-3
+		
 		let pitcher = team.getFielder(1);
 		let stamina = pitcher.stamina;
 		let fatigue = team.fatigue;
@@ -1052,3 +1242,10 @@ function getName(player: Player, type?: number) {
 	return "";
 }
 
+function pad(val: string|number, pad: string, right?: boolean) {
+    if (right) {
+        return (val + pad).substring(0, pad.length);
+    } else {
+        return (pad + val).slice(-pad.length);
+    }
+}

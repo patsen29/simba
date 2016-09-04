@@ -8,7 +8,7 @@ var Dice = (function () {
     function Dice() {
     }
     Dice.prototype.roll = function (sides) {
-        if (!sides) {
+        if (!sides || sides <= 1) {
             return Math.random();
         }
         return Math.floor(Math.random() * sides) + 1;
@@ -52,6 +52,7 @@ var Player = (function () {
         else {
             return this.first + " " + this.last;
         }
+        // TODO: Handle max length better?
     };
     Player.prototype.toString = function () {
         return "[" + this.getName(1) + " " + POS_LABELS[this.pos] + "]";
@@ -71,18 +72,6 @@ var Ratio = (function () {
             this.gb = old.gb;
         }
     }
-    Ratio.fromJson = function (json) {
-        var r = new Ratio();
-        r.bb = json.bb;
-        r.so = json.so;
-        r.hr = json.hr;
-        r.h = json.h;
-        r.xb = json.xb;
-        r.tr = json.tr;
-        r.sba = json.sba;
-        r.gb = json.gb;
-        return r;
-    };
     Ratio.prototype.multiply = function (by) {
         this.bb *= by.bb;
         this.so *= by.so;
@@ -120,6 +109,26 @@ var Ratio = (function () {
     };
     return Ratio;
 }());
+var LeagueAverage = (function (_super) {
+    __extends(LeagueAverage, _super);
+    function LeagueAverage() {
+        _super.apply(this, arguments);
+    }
+    LeagueAverage.fromJson = function (json, id) {
+        var r = new LeagueAverage();
+        r.bb = json.bb;
+        r.so = json.so;
+        r.hr = json.hr;
+        r.h = json.h;
+        r.xb = json.xb;
+        r.tr = json.tr;
+        r.sba = json.sba;
+        r.gb = json.gb;
+        r.id = id;
+        return r;
+    };
+    return LeagueAverage;
+}(Ratio));
 var Matchup = (function () {
     function Matchup() {
     }
@@ -216,8 +225,6 @@ function ratePlayer(line, lgAvg) {
         else if (arm === 'r') {
             p.arm = "L/R";
         }
-        p.stats["pIP"] = ip;
-        p.stats["pERA"] = era;
         // Hitting ratings
         var code = line[80] || "C";
         var bH = { "A": 25, "B": 20, "C": 15, "D": 10, "E": 5 }[code];
@@ -232,6 +239,7 @@ function ratePlayer(line, lgAvg) {
             so: 55 - 1.02 * bH,
             sb: 0.07
         });
+        p.speed = 1;
     }
     else {
         var ab = +line.substring(27, 30);
@@ -243,6 +251,7 @@ function ratePlayer(line, lgAvg) {
         var so = +line.substring(51, 54);
         p.arm = line[59] + "/?";
         var sb = +line.substring(64, 67);
+        var cs = +line.substring(68, 70);
         p.bat = calcBatRatios({
             ab: ab,
             h: h,
@@ -253,9 +262,14 @@ function ratePlayer(line, lgAvg) {
             so: so,
             sb: sb
         }, lgAvg);
-        p.stats["bAB"] = ab;
-        p.stats["bH"] = h;
-        p.stats["bHR"] = hr;
+        // Calculate speed
+        var sp1 = ((sb + 3) / (sb + cs + 7) - .4) * 20;
+        var sp2 = Math.sqrt((sb + cs) / (h - db - tr - hr + bb)) / .07;
+        var sp3 = tr / (ab - hr - so) / .0016;
+        sp1 = Math.max(0, Math.min(10, sp1));
+        sp2 = Math.max(0, Math.min(10, sp2));
+        sp3 = Math.max(0, Math.min(10, sp3));
+        p.speed = Math.max(1, Math.round((10 * sp1 + 10 * sp2 + 6 * sp3) / 26));
     }
     return p;
 }
@@ -273,12 +287,16 @@ var BoxScoreEntry = (function () {
             this.posList.push(pos);
         }
     };
-    BoxScoreEntry.prototype.getName = function () {
-        var posStr = [];
-        for (var i = 0; i < this.posList.length; i++) {
-            posStr.push(POS_LABELS[this.posList[i]].toLowerCase());
+    BoxScoreEntry.prototype.getName = function (includePos) {
+        var str = this.player.getName();
+        if (includePos) {
+            var posStr = [];
+            for (var i = 0; i < this.posList.length; i++) {
+                posStr.push(POS_LABELS[this.posList[i]].toLowerCase());
+            }
+            str = str + " " + posStr.join("-");
         }
-        return this.player.getName() + " " + posStr.join("-");
+        return str;
     };
     BoxScoreEntry.prototype.creditStat = function (stat) {
         this.stats[stat] = this.getStat(stat) + 1;
@@ -334,7 +352,8 @@ var Lineup = (function () {
     return Lineup;
 }());
 var Team = (function () {
-    function Team(city, nick, abbr, useDH, lgAvg) {
+    function Team(key, city, nick, abbr, useDH, lgAvg) {
+        this.key = key;
         this.city = city;
         this.nick = nick;
         this.abbr = abbr;
@@ -344,6 +363,9 @@ var Team = (function () {
         this.lineups = [];
         this.staff = new PitchingStaff();
     }
+    Team.prototype.getFullName = function () {
+        return this.city + " " + this.nick;
+    };
     return Team;
 }());
 var TeamState = (function () {
@@ -513,13 +535,28 @@ var Play = (function () {
                     str += " singled";
                     break;
                 case "GB":
-                    str += " grounded out";
+                    if (this.flags.gdpResult) {
+                        str += " grounded into double play";
+                    }
+                    else if (this.flags.reachFC) {
+                        str += " reached on fielder's choice";
+                    }
+                    else {
+                        str += " grounded out";
+                    }
                     break;
                 case "FB":
                     str += " flied out";
                     break;
                 default:
                     str += " does unknown play " + this.play;
+            }
+            var labels = [" is out", " to first", " to second", " to third", " scores"];
+            for (var i = 1; i <= 3; i++) {
+                if (this.bases[i] && this.adv[i] !== null && this.adv[i] !== i) {
+                    var advBase = this.adv[i];
+                    str = str + ", " + this.bases[i].getName() + labels[advBase];
+                }
             }
             return str + ". ";
         }
@@ -549,6 +586,29 @@ var Play = (function () {
         else {
             return "FB";
         }
+    };
+    Play.prototype.findOdds = function (specs) {
+        var odds = specs.base || 0;
+        if (specs.speed) {
+            odds = odds + .04 * specs.speed;
+        }
+        if (specs.outsRule) {
+            if (this.game.outs === 2) {
+                odds += .10;
+            }
+            else {
+                odds -= .05;
+            }
+        }
+        // TODO: Randomize ±20%
+        var cap = specs.cap || .02;
+        if (odds < cap) {
+            odds = cap;
+        }
+        if (odds > 1 - cap) {
+            odds = 1 - cap;
+        }
+        return odds;
     };
     Play.prototype.resolveBB = function () {
         this.adv[0] = 1;
@@ -587,8 +647,39 @@ var Play = (function () {
     };
     Play.prototype.resolve2B = function () {
         this.adv = [2, 3, 4, 4];
-        // TODO Score from 1st on double
-        console.debug("TODO Resolve 2B");
+        if (this.bases[1]) {
+            if (!this.flags.odds1) {
+                this.flags.odds1 = this.findOdds({
+                    base: .3,
+                    speed: this.bases[1].speed,
+                    outsRule: true
+                });
+            }
+            if (!this.flags.off) {
+                // Assuming AI
+                var breakevenArr = [.91, .79, .46];
+                var breakeven = breakevenArr[this.game.outs];
+                if (this.flags.odds1 >= breakeven) {
+                    this.flags.off = "send";
+                }
+                else {
+                    this.flags.off = "hold";
+                }
+                console.log("  [AI] Score from 1st? " + this.flags.odds1 +
+                    " vs " + breakeven + ": " + this.flags.off);
+            }
+            if (this.flags.off === "send") {
+                var roll = this.game.dice.roll();
+                if (roll < this.flags.odds1) {
+                    this.adv[1] = 4;
+                }
+                else {
+                    this.adv[1] = 0;
+                }
+                console.log("  Score from 1st? " +
+                    roll.toFixed(3) + ": " + this.adv[1]);
+            }
+        }
         this.game.getTeamOffense().h += 1;
         this.game.getTeamOffense().creditBatter("bH", "b2B", "bAB");
         this.game.getTeamDefense().creditPitcher("pH", "pBFP");
@@ -604,20 +695,97 @@ var Play = (function () {
         this.finalizePlay();
     };
     Play.prototype.resolveGB = function () {
-        this.adv[0] = 0;
-        // TODO Handle real grounders
-        console.debug("TODO Resolve GB");
+        if (!this.flags.gbType) {
+            this.flags.gbType = this.game.dice.roll(4);
+        }
+        if (this.game.outs === 2) {
+            // Take routine out at 1st
+            this.adv[0] = 0;
+        }
+        else if (this.flags.gbType === 1) {
+            // automatic runner advancing grounders
+            this.adv = [0, 2, 3, 4];
+        }
+        else if (this.flags.gbType === 2) {
+            // non-runner advancing, and lead forced runner is out. (Or GB is no one on 1st)
+            this.resolveSoftGB();
+        }
+        else {
+            // potential double play grounders
+            this.resolvePotentialGDP();
+        }
         this.game.getTeamOffense().creditBatter("bAB");
         this.game.getTeamDefense().creditPitcher("pBFP");
         this.finalizePlay();
     };
+    Play.prototype.resolveSoftGB = function () {
+        if (this.bases[1]) {
+            if (this.bases[2]) {
+                if (this.bases[3]) {
+                    this.adv = [1, 2, 3, 0];
+                }
+                else {
+                    this.adv = [1, 2, 0, null];
+                }
+            }
+            else {
+                this.adv = [1, 0, null, 3];
+            }
+        }
+        else {
+            this.adv = [0, null, 2, 3];
+        }
+    };
+    Play.prototype.resolvePotentialGDP = function () {
+        if (this.flags.infieldIn) {
+            throw "TODO Not implemented yet";
+        }
+        else {
+            if (this.bases[1]) {
+                var dpDC = 4 + this.bases[1].speed; // Base 5/13 odds. TODO: Factor speed, defense.
+                var dpRoll = this.game.dice.roll(13);
+                console.debug("  DP roll: " + dpRoll + " vs DC " + dpDC);
+                if (dpRoll >= dpDC) {
+                    this.flags.gdpResult = true;
+                    this.game.getTeamOffense().creditBatter("bGDP");
+                    if (this.game.outs >= 1) {
+                        this.adv = [0, 0, null, null];
+                    }
+                    else {
+                        this.adv = [0, 0, 3, 4];
+                    }
+                }
+                else {
+                    this.adv = [1, 0, 3, 4];
+                    this.flags.reachFC = true;
+                }
+            }
+            else {
+                this.adv = [0, 2, 3, 4];
+            }
+        }
+    };
     Play.prototype.resolveFB = function () {
-        this.adv[0] = 0;
+        if (this.game.outs === 2) {
+            this.adv[0] = 0;
+            this.game.getTeamOffense().creditBatter("bAB");
+        }
+        else if (this.bases[2] || this.bases[3]) {
+            // TODO: Upgrade this.
+            this.adv[0] = 0;
+            this.game.getTeamOffense().creditBatter("bAB");
+        }
+        else {
+            this.adv[0] = 0;
+            this.game.getTeamOffense().creditBatter("bAB");
+        }
         // TODO Handle tagup.
         console.debug("TODO Resolve FB");
-        this.game.getTeamOffense().creditBatter("bAB");
         this.game.getTeamDefense().creditPitcher("pBFP");
         this.finalizePlay();
+    };
+    Play.prototype.resolveTagup = function () {
+        var odds2 = 0, odds3 = 0;
     };
     Play.prototype.finalizePlay = function () {
         // Note: this.game.bases is game state we're updating.
@@ -700,7 +868,15 @@ var Play = (function () {
     };
     Play.prototype.advance = function (command) {
         if (this.status === 0) {
-            this.status = 1; // TODO: Handle manager cmds
+            // TODO: Do something about empty commands.
+            if (command && command.substring(0, 6) === "force:") {
+                this.play = command.substring(6);
+                this.status = 2;
+            }
+            else {
+                // auto advance for now.
+                this.status = 1;
+            }
         }
         if (this.status === 1) {
             var ratios = new Ratio(this.game.environment);
@@ -922,6 +1098,13 @@ var AIUtils = (function () {
         return list;
     };
     AIUtils.considerReliever = function (team, startOfInning) {
+        // Step 1: Decide if we need a hook
+        // Step 2: Decide game situation and what kind of reliever we need
+        // Step 3: Set initial expectation of new pitcher's stamina
+        // CL 9th, up 1-3
+        // SU 8th+, within 2; maybe 7th
+        // MR 5-7th, within 4
+        // LR 1-3
         var pitcher = team.getFielder(1);
         var stamina = pitcher.stamina;
         var fatigue = team.fatigue;
@@ -963,4 +1146,12 @@ function getName(player, type) {
         return player.getName(type);
     }
     return "";
+}
+function pad(val, pad, right) {
+    if (right) {
+        return (val + pad).substring(0, pad.length);
+    }
+    else {
+        return (pad + val).slice(-pad.length);
+    }
 }
