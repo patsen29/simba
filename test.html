@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html ng-app="simba">
+
+<head>
+    <link rel="stylesheet" type="text/css" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.7/css/bootstrap.min.css" />
+</head>
+
+<body class="container" ng-controller="UIController as ui">
+    <h1>Simba Prototype</h1>
+
+    <div ng-show="ui.isTab('loading')">Loading...</div>
+    <div ng-include="'inc/main.htm'" ng-show="ui.isTab('main')"></div>
+    <div ng-include="'inc/startgame.htm'" ng-show="ui.isTab('startgame')"></div>
+    <div ng-include="'inc/league.htm'" ng-show="ui.isTab('league')"></div>
+    <div ng-include="'inc/viewteam.htm'" ng-show="ui.isTab('viewteam')"></div>
+    <div ng-include="'inc/gamescreen.htm'" ng-show="ui.isTab('gamescreen')"></div>
+    <div ng-include="'inc/import.htm'" ng-show="ui.isTab('import')"></div>
+
+    <script type="text/javascript" src="https://ajax.googleapis.com/ajax/libs/angularjs/1.5.8/angular.min.js"></script>
+    <script type="text/javascript" src="js/sbs.js"></script>
+    <script type="text/javascript" src="js/season.js"></script>
+    <script type="text/javascript" src="js/app.js"></script>
+</body>
+
+</html>

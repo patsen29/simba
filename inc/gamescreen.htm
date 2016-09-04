@@ -1,0 +1,52 @@
+<h2>Game</h2>
+
+<ul class="nav nav-tabs">
+  <li ng-class="{active:ui.gameTab === 1}">
+      <a href ng-click="ui.gameTab = 1">Game</a>
+      </li>
+  <li ng-class="{active:ui.gameTab === 2}">
+      <a href ng-click="ui.gameTab = 2">Rosters</a>
+      </li>
+  <li ng-class="{active:ui.gameTab === 3}">
+      <a href ng-click="ui.gameTab = 3">Box score</a>
+      </li>
+</ul>
+
+<div ng-show="ui.gameTab === 1">
+    <div class="row">
+        <div class="col-md-4">
+            <span ng-repeat="team in ui.game.teams">{{team.ref.abbr}} {{team.r}} </span> - 
+            {{ui.game.getInningString()}}, {{ui.game.outs}} out
+        </div>
+        <div class="col-md-8">{{ui.getLastPlay() || "Announcer goes here"}}</div>
+    </div>
+    <div>
+        Ballpark picture goes here
+        <div>3rd: {{ui.getName(ui.game.bases[3], 2) || "(empty)"}}</div>
+        <div>2nd: {{ui.getName(ui.game.bases[2], 2) || "(empty)"}}</div>
+        <div>1st: {{ui.getName(ui.game.bases[1], 2) || "(empty)"}}</div>
+        <div>Batter: {{ui.getName(ui.game.getBatter(), 2)}}</div>
+        <div>Pitcher: {{ui.getName(ui.game.getPitcher(), 2)}}</div>
+    </div>
+    <div>
+        <button ng-click="ui.advanceGame(ui.game, '')">Advance</button>
+        <button ng-click="ui.simGame(ui.game)">Sim game</button>
+    </div>
+</div>
+
+<div ng-show="ui.gameTab === 2">
+    Rosters go here
+    <div class="row">
+        <div class="col-md-6" ng-repeat="team in ui.game.teams">
+            <p>{{team.ref.nick}}</p>
+            <p>Lineup</p>
+            <p>Pitcher: </p>
+        </div>
+    </div>
+</div>
+
+<div ng-show="ui.gameTab === 3">
+    <pre>{{ui.generateBoxScore(ui.game)}}</pre>
+</div>
+    
+<button ng-click="ui.switchTab('main')">Back/Quit</button>

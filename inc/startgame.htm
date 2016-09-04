@@ -1,0 +1,25 @@
+<h2>Start game</h2>
+<div class="row">
+    <div ng-repeat="pendingTeam in ui.pendingGame.teams" class="col-md-4">
+        <p><b>{{pendingTeam.label}} Team</b></p>
+        <div ng-hide="pendingTeam.team">
+            <select ng-model="pendingTeam.selected" ng-options="team.key as team.getFullName() for team in ui.pendingGame.teamsRef"></select>
+            <button ng-click="ui.setTeam(pendingTeam)">Set Team</button>
+        </div>
+        <div ng-show="pendingTeam.team">
+            <p>
+                {{pendingTeam.team.getFullName()}}
+                <button ng-click="ui.clearTeam(pendingTeam)">Edit</button>
+            </p>
+            <p>Pitcher dropdown</p>
+            <p>Lineup display</p>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <p><b>Game options</b></p>
+        <p>Use DH: {{ui.pendingGame.useDH ? "Yes" : "No"}}</p>
+        <p>Ballpark: (n/a)</p>
+        <p><button ng-click="ui.startGame(ui.pendingGame)">Start game</button></p>
+    </div>
+</div>
+<button ng-click="ui.switchTab('main')">Back</button>

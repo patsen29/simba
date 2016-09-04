@@ -1,0 +1,8 @@
+<h2>League</h2>
+<ul>
+    <li ng-repeat="team in data.teams">
+        <a href ng-click="ui.showTeam(team.key)">{{team.city}} {{team.nick}}</a>
+    </li>
+</ul>
+<button ng-click="ui.switchTab('main')">Back</button>
+<button ng-click="ui.switchTab('import')">Import</button>
